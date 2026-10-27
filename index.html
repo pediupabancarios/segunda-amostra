@@ -176,6 +176,8 @@ sb.auth.onAuthStateChange((ev,session)=>{
   if(ev==='INITIAL_SESSION'||ev==='SIGNED_IN'||ev==='SIGNED_OUT')setTimeout(()=>boot(session));
 });
 const isAdmin=()=>CU&&CU.papel==='admin';
+// Módulos ligados nesta fase. Para reativar, troque para true.
+const MOD={resultados:false,casos:false};
 const DOM='@sa.hemocentro.invalid';
 const toEmail=u=>(u=u.trim().toLowerCase()).includes('@')?u:u+DOM;
 const nomeUsu=e=>String(e||'').endsWith(DOM)?e.slice(0,-DOM.length):e;
@@ -211,7 +213,8 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&AUTH==='o
 function render(){
   if(AUTH!=='ok'){G('app').innerHTML=pgLogin();return}
   const [pg,id,x]=location.hash.slice(1).split('/');
-  const fn={home:pgHome,lista:pgLista,doador:pgDoador,nova:pgNova,resultado:pgResultado,caso:pgCaso,casos:pgCasos,relatorios:pgRel,usuarios:pgUsuarios}[pg]||pgHome;
+  const off={lista:!MOD.resultados,resultado:!MOD.resultados,caso:!MOD.casos,casos:!MOD.casos};
+  const fn=(off[pg]?null:{home:pgHome,lista:pgLista,doador:pgDoador,nova:pgNova,resultado:pgResultado,caso:pgCaso,casos:pgCasos,relatorios:pgRel,usuarios:pgUsuarios}[pg])||pgHome;
   G('app').innerHTML=fn(id,x);
   window.scrollTo(0,0);
 }
@@ -295,8 +298,8 @@ function pgHome(){
   <main>
    <div style="padding:4px 2px 6px"><div style="font-size:20px;font-weight:700">Olá, ${esc(CU.nome)}.</div><div style="color:var(--tx2);margin-top:4px">Seja bem-vindo(a) ao sistema.</div></div>
    ${m('#nova',I.tube,'Solicitar Segunda Amostra','Registrar nova coleta e solicitar exames laboratoriais.',1)}
-   ${m('#lista',I.flask,'Resultados Laboratoriais',`Cadastrar e consultar resultados da segunda amostra. <b style="color:var(--rd);display:inline">${pend?pend+' em aberto':''}</b>`)}
-   ${m('#casos',I.cal,'Acompanhamento de Casos','Visualizar pendências e status dos atendimentos.')}
+   ${MOD.resultados?m('#lista',I.flask,'Resultados Laboratoriais',`Cadastrar e consultar resultados da segunda amostra. <b style="color:var(--rd);display:inline">${pend?pend+' em aberto':''}</b>`):''}
+   ${MOD.casos?m('#casos',I.cal,'Acompanhamento de Casos','Visualizar pendências e status dos atendimentos.'):''}
    ${m('#relatorios',I.doc,'Relatórios','Emitir relatórios e exportar dados.')}
    ${isAdmin()?m('#usuarios',I.user(26),'Usuários','Liberar e gerenciar o acesso da equipe.'):''}
    <button class="btn out sm" style="margin:14px auto 0" onclick="logout()">${I.out} Sair</button>
@@ -350,10 +353,10 @@ function pgDoador(id){
   let body='';
   if(t==='exames'){
     body=`<div class="h2" style="margin:6px 0 2px">Exames da segunda amostra</div>
-    ${c.exames.map((e,i)=>`<a class="exrow" href="#resultado/${c.id}/${i}" style="text-decoration:none;color:inherit"><span>${esc(e.nome)}</span><span style="display:flex;gap:6px;align-items:center"><span class="st s-${e.status}">${RES[e.status]}</span>${I.chev}</span></a>`).join('')}
+    ${c.exames.map((e,i)=>`<a class="exrow" ${MOD.resultados?`href="#resultado/${c.id}/${i}"`:''} style="text-decoration:none;color:inherit"><span>${esc(e.nome)}</span><span style="display:flex;gap:6px;align-items:center"><span class="st s-${e.status}">${RES[e.status]}</span>${MOD.resultados?I.chev:''}</span></a>`).join('')}
     <div class="info"><span style="color:var(--nv)">${I.flask}</span><div><b>Solicitação da segunda amostra</b><br>Data: ${fdt(c.solicitadoEm)}<br>Responsável: ${esc(c.responsavel)}${c.obs?`<br>Obs.: ${esc(c.obs)}`:''}</div></div>
-    <div class="row"><a class="btn out" href="#caso/${c.id}" style="text-decoration:none">Acompanhar caso</a>
-    <a class="btn" href="#resultado/${c.id}/${Math.max(0,c.exames.findIndex(e=>e.status==='pendente'))}" style="text-decoration:none">Registrar Resultado</a></div>`;
+    <div class="row">${MOD.casos?`<a class="btn out" href="#caso/${c.id}" style="text-decoration:none">Acompanhar caso</a>`:''}
+    ${MOD.resultados?`<a class="btn" href="#resultado/${c.id}/${Math.max(0,c.exames.findIndex(e=>e.status==='pendente'))}" style="text-decoration:none">Registrar Resultado</a>`:`<a class="btn" href="#home" style="text-decoration:none">Voltar ao início</a>`}</div>`;
   }else if(t==='hist'){
     body=c.historico.map(h=>`<div class="card" style="padding:10px 12px"><div style="font-size:12px;color:var(--tx2)">${fdt(h.em)}</div><div style="font-size:13.5px;margin-top:2px">${esc(h.txt)}</div></div>`).join('')||'<div class="empty">Sem histórico.</div>';
   }else{
