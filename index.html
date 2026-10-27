@@ -134,7 +134,13 @@ const I={
 };
 
 /* ========= dados ========= */
-const EXAMES=['HIV 1 e 2','HBsAg','Anti-HCV','Sífilis (VDRL)','Chagas (Trypanosoma cruzi)','Anti-HBc','HTLV I/II'];
+// Exames da ficha F.CD.101.05.05 — Solicitação de Exames da Orientação do Doador
+const GRUPOS=[
+  ['SOROLOGIA',['HBsAg','Anti-HBC-IGG-IGM','Sífilis','Sorologia','Anti-HCV','Chagas-IGG','HTLV I/II','NAT']],
+  ['IMUNOHEMATOLOGIA',['Reclassificação Sanguínea']],
+  ['HEMOGLOBINOPATIAS',['Eletroforese de Hemoglobina']],
+];
+const EXAMES=GRUPOS.flatMap(g=>g[1]);
 const RES={pendente:'Pendente',nao_reagente:'Não reagente',reagente:'Reagente',inconclusivo:'Inconclusivo'};
 const ETAPAS=[['teleconsulta','Teleconsulta'],['confirmatorios','Exames confirmatórios'],['encaminhamento','Encaminhamento']];
 const SB_URL='https://ohuaoncwgioawgptyqgz.supabase.co';
@@ -143,10 +149,10 @@ const sb=supabase.createClient(SB_URL,SB_KEY);
 let DB={cases:[]},CU=null,AUTH='loading',LM='entrar';
 
 const loc=iso=>{if(!iso)return'';const d=new Date(iso);d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)};
-const fromRow=r=>({id:r.id,nome:r.nome,codigo:r.codigo,doacao:r.doacao||'',idade:r.idade,sexo:r.sexo,solicitadoEm:loc(r.solicitado_em),
+const fromRow=r=>({id:r.id,nome:r.nome,codigo:r.codigo||'',doacao:r.doacao||'',nascimento:r.nascimento||'',entrega:r.entrega||'',idade:r.idade,sexo:r.sexo,solicitadoEm:loc(r.solicitado_em),
   responsavel:r.responsavel||'',obs:r.obs||'',exames:r.exames||[],etapas:{teleconsulta:null,confirmatorios:null,encaminhamento:null,...(r.etapas||{})},
   historico:r.historico||[],observacoes:r.observacoes||[]});
-const toRow=c=>({id:c.id,nome:c.nome,codigo:c.codigo,doacao:c.doacao||null,idade:c.idade,sexo:c.sexo,solicitado_em:new Date(c.solicitadoEm).toISOString(),
+const toRow=c=>({id:c.id,nome:c.nome,codigo:c.codigo||'',doacao:c.doacao||null,nascimento:c.nascimento||null,entrega:c.entrega||null,idade:c.idade,sexo:c.sexo,solicitado_em:new Date(c.solicitadoEm).toISOString(),
   responsavel:c.responsavel,obs:c.obs,exames:c.exames,etapas:c.etapas,historico:c.historico,observacoes:c.observacoes});
 async function fetchCases(){
   const{data,error}=await sb.from('sa_casos').select('*').order('solicitado_em',{ascending:false});
@@ -345,7 +351,7 @@ function pgLista(){
 function lst(){const l=filtrados();return l.length?l.map(itemHTML).join(''):'<div class="empty">Nenhuma solicitação encontrada.</div>'}
 
 function donorCard(c,badge=''){
-  return`<div class="card donor"><div class="avatar">${I.user(30)}</div><div style="flex:1"><b>${esc(c.nome)}</b><div>Código: ${esc(c.codigo)}<br>Doação: ${fd(c.doacao)}${c.idade?`<br>Idade: ${c.idade} anos &nbsp;|&nbsp; Sexo: ${c.sexo}`:''}</div></div>${badge}</div>`;
+  return`<div class="card donor"><div class="avatar">${I.user(30)}</div><div style="flex:1"><b>${esc(c.nome)}</b><div>Registro: ${esc(c.codigo||'—')}<br>Coleta: ${fd(c.doacao)}${c.idade?`<br>Idade: ${c.idade} anos &nbsp;|&nbsp; Sexo: ${c.sexo||'—'}`:''}${c.entrega?`<br>Entrega: ${fd(c.entrega)}`:''}</div></div>${badge}</div>`;
 }
 function pgDoador(id){
   const c=findCase(id);if(!c)return pgLista();
@@ -354,9 +360,10 @@ function pgDoador(id){
   if(t==='exames'){
     body=`<div class="h2" style="margin:6px 0 2px">Exames da segunda amostra</div>
     ${c.exames.map((e,i)=>`<a class="exrow" ${MOD.resultados?`href="#resultado/${c.id}/${i}"`:''} style="text-decoration:none;color:inherit"><span>${esc(e.nome)}</span><span style="display:flex;gap:6px;align-items:center"><span class="st s-${e.status}">${RES[e.status]}</span>${MOD.resultados?I.chev:''}</span></a>`).join('')}
-    <div class="info"><span style="color:var(--nv)">${I.flask}</span><div><b>Solicitação da segunda amostra</b><br>Data: ${fdt(c.solicitadoEm)}<br>Responsável: ${esc(c.responsavel)}${c.obs?`<br>Obs.: ${esc(c.obs)}`:''}</div></div>
+    <div class="info"><span style="color:var(--nv)">${I.flask}</span><div><b>Solicitação de exames</b><br>Data: ${fdt(c.solicitadoEm)}<br>Responsável: ${esc(c.responsavel)}${c.obs?`<br>Obs.: ${esc(c.obs)}`:''}</div></div>
+    <button class="btn" onclick="imprimirFichas([findCase('${c.id}')])">${I.doc} Imprimir ficha</button>
     <div class="row">${MOD.casos?`<a class="btn out" href="#caso/${c.id}" style="text-decoration:none">Acompanhar caso</a>`:''}
-    ${MOD.resultados?`<a class="btn" href="#resultado/${c.id}/${Math.max(0,c.exames.findIndex(e=>e.status==='pendente'))}" style="text-decoration:none">Registrar Resultado</a>`:`<a class="btn" href="#home" style="text-decoration:none">Voltar ao início</a>`}</div>`;
+    ${MOD.resultados?`<a class="btn" href="#resultado/${c.id}/${Math.max(0,c.exames.findIndex(e=>e.status==='pendente'))}" style="text-decoration:none">Registrar Resultado</a>`:`<a class="btn out" href="#home" style="text-decoration:none">Voltar ao início</a>`}</div>`;
   }else if(t==='hist'){
     body=c.historico.map(h=>`<div class="card" style="padding:10px 12px"><div style="font-size:12px;color:var(--tx2)">${fdt(h.em)}</div><div style="font-size:13.5px;margin-top:2px">${esc(h.txt)}</div></div>`).join('')||'<div class="empty">Sem histórico.</div>';
   }else{
@@ -376,30 +383,45 @@ async function delCase(id){if(!confirm('Excluir esta solicitação? Esta ação 
   DB.cases=DB.cases.filter(c=>c.id!==id);location.replace('#lista');toast('Solicitação excluída')}
 
 function pgNova(){
+  const col=l=>`<div>${l.map(e=>`<label class="chk"><input type="checkbox" name="ex" value="${esc(e)}">${esc(e)}</label>`).join('')}</div>`;
+  const sor=GRUPOS[0][1];
   return bar('Solicitar Segunda Amostra')+`<main><form onsubmit="salvarNova(event)" style="display:flex;flex-direction:column">
    <div class="h2">Dados do doador</div>
-   <div class="ico-in" style="margin-top:10px">${I.user(18)}<input class="in" id="nn" placeholder="Nome do doador" required></div>
-   <label class="l">Código da doação</label>
-   <div class="ico-in">${I.search}<input class="in" id="nc" inputmode="numeric" placeholder="Ex.: 123456" required oninput="checkCod(this.value)"></div>
+   <label class="l">Nome do doador</label><input class="in" id="nn" required>
+   <div class="row">
+    <div><label class="l">Data de nascimento</label><input class="in" id="nb" type="date" onchange="calcIdade()"></div>
+    <div style="flex:.45"><label class="l">Idade</label><input class="in" id="ni" type="number" min="0" max="120"></div></div>
+   <label class="l">Sexo</label>
+   <div style="display:flex;gap:24px"><label class="rad"><input type="radio" name="sx" value="F">F</label><label class="rad"><input type="radio" name="sx" value="M">M</label></div>
+   <div class="row">
+    <div><label class="l">Data da coleta</label><input class="in" id="nd" type="date" value="${today()}" onchange="calcIdade()"></div>
+    <div><label class="l">Data da entrega</label><input class="in" id="ne" type="date"></div></div>
+   <div class="row">
+    <div><label class="l">Registro</label><input class="in" id="nc" inputmode="numeric" oninput="checkCod(this.value)"></div>
+    <div><label class="l">Responsável</label><input class="in" id="nr" value="${esc(CU.nome)}"></div></div>
    <div id="codinfo" style="font-size:12px;color:var(--or);margin-top:4px"></div>
-   <div class="row"><div><label class="l">Data da doação</label><input class="in" id="nd" type="date" value="${today()}" required></div>
-    <div style="flex:.5"><label class="l">Idade</label><input class="in" id="ni" type="number" min="16" max="80"></div>
-    <div style="flex:.5"><label class="l">Sexo</label><select class="in" id="ns"><option>M</option><option>F</option></select></div></div>
-   <div class="h2" style="margin:18px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--ln)">Exames solicitados</div>
-   ${EXAMES.map((e,i)=>`<label class="chk"><input type="checkbox" name="ex" value="${esc(e)}" ${i<4?'checked':''}>${esc(e)}</label>`).join('')}
-   <label class="l" style="font-weight:700;color:var(--nv)">Observações <span style="color:var(--tx3);font-weight:400">(opcional)</span></label>
-   <textarea class="in" id="no" placeholder="Ex.: motivo da solicitação, intercorrências, etc."></textarea>
+   <div class="h2" style="margin:18px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--ln)">Sorologia</div>
+   <div class="row">${col(sor.slice(0,4))}${col(sor.slice(4))}</div>
+   <div class="h2" style="margin:14px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--ln)">Imunohematologia</div>${col(GRUPOS[1][1])}
+   <div class="h2" style="margin:14px 0 4px;padding-bottom:6px;border-bottom:1px solid var(--ln)">Hemoglobinopatias</div>${col(GRUPOS[2][1])}
+   <label class="l" style="font-weight:700;color:var(--nv)">Observações</label>
+   <textarea class="in" id="no"></textarea>
    <div class="row" style="margin-top:18px"><button type="button" class="btn out" onclick="history.back()">Cancelar</button><button class="btn">Solicitar</button></div>
   </form></main>`;
 }
-function checkCod(v){const c=DB.cases.find(x=>x.codigo===v.trim());G('codinfo').textContent=c?`Já existe solicitação para este código (${c.nome}).`:''}
+function idadeEm(nasc,ref){if(!nasc)return null;const a=new Date(nasc+'T00:00'),b=new Date((ref||today())+'T00:00');let i=b.getFullYear()-a.getFullYear();
+  if(b.getMonth()<a.getMonth()||(b.getMonth()===a.getMonth()&&b.getDate()<a.getDate()))i--;return i>=0?i:null}
+function calcIdade(){const i=idadeEm(G('nb').value,G('nd').value);if(i!=null)G('ni').value=i}
+function checkCod(v){const c=v.trim()&&DB.cases.find(x=>x.codigo===v.trim());G('codinfo').textContent=c?`Já existe solicitação para este código (${c.nome}).`:''}
 async function salvarNova(e){
   e.preventDefault();
   const exs=[...document.querySelectorAll('input[name=ex]:checked')].map(i=>ex(i.value));
   if(!exs.length){toast('Selecione ao menos um exame');return}
   const sol=now();
-  const c={id:uid(),nome:G('nn').value.trim(),codigo:G('nc').value.trim(),doacao:G('nd').value,idade:+G('ni').value||null,sexo:G('ns').value,
-    solicitadoEm:sol,responsavel:CU.nome,exames:exs,obs:G('no').value.trim(),historico:[{em:sol,txt:'Solicitação da segunda amostra criada — '+CU.nome}],observacoes:[],
+  const sx=document.querySelector('input[name=sx]:checked');
+  const c={id:uid(),nome:G('nn').value.trim(),codigo:G('nc').value.trim(),doacao:G('nd').value,nascimento:G('nb').value,entrega:G('ne').value,
+    idade:G('ni').value===''?null:+G('ni').value,sexo:sx?sx.value:null,
+    solicitadoEm:sol,responsavel:G('nr').value.trim()||CU.nome,exames:exs,obs:G('no').value.trim(),historico:[{em:sol,txt:'Solicitação da segunda amostra criada — '+CU.nome}],observacoes:[],
     etapas:{teleconsulta:null,confirmatorios:null,encaminhamento:null}};
   const b=e.target.querySelector('button:last-child');b.disabled=true;
   if(!await save(c)){b.disabled=false;return}
@@ -474,7 +496,7 @@ function pgRel(){
    <label class="l h2">Tipo de exame</label><select class="in" id="rt"><option value="">Todos</option>${EXAMES.map(e=>`<option>${esc(e)}</option>`).join('')}</select>
    <button class="btn" style="margin-top:18px" onclick="gerar('resumo')">${I.doc} Gerar Relatório</button></div>
    <div class="card"><div class="h2" style="margin-bottom:4px">Relatórios disponíveis</div>
-    ${[['resumo','Resumo de solicitações','PDF'],['resultados','Resultados laboratoriais','PDF'],['casos','Acompanhamento de casos','PDF'],['csv','Exportar dados','CSV']].map(([k,t,f])=>`<button class="rep" onclick="gerar('${k}')"><span style="color:var(--nv)">${I.clip}</span><div>${t}<small>${f}</small></div></button>`).join('')}
+    ${[['fichas','Fichas de solicitação do período','Imprimir'],['branco','Ficha em branco','Imprimir'],['resumo','Resumo de solicitações','PDF'],['resultados','Resultados laboratoriais','PDF'],['casos','Acompanhamento de casos','PDF'],['csv','Exportar dados','CSV']].map(([k,t,f])=>`<button class="rep" onclick="gerar('${k}')"><span style="color:var(--nv)">${I.clip}</span><div>${t}<small>${f}</small></div></button>`).join('')}
    </div></main>`;
 }
 function relDados(){
@@ -482,7 +504,9 @@ function relDados(){
   return DB.cases.filter(c=>{const d=c.solicitadoEm.slice(0,10);return(!i||d>=i)&&(!f||d<=f)&&(s==='todas'||situacao(c)===s)&&(!t||c.exames.some(e=>e.nome===t))});
 }
 function gerar(k){
+  if(k==='branco'){imprimirFichas([{}]);return}
   const l=relDados(),t=G('rt').value;
+  if(k==='fichas'){if(!l.length){toast('Nenhuma ficha no período');return}imprimirFichas(l.slice().reverse());return}
   if(!l.length){toast('Nenhum registro no período');return}
   if(k==='csv'){
     const rows=[['Nome','Código','Doação','Idade','Sexo','Solicitado em','Responsável','Situação','Exame','Resultado','Data resultado','Teleconsulta','Confirmatórios','Encaminhamento']];
@@ -535,6 +559,56 @@ async function setAtivo(email,v){const{error}=await sb.from('sa_usuarios').updat
 async function reiniciar(email){if(!confirm('Reiniciar a conta de '+nomeUsu(email)+'? A senha atual deixa de funcionar e a pessoa cria uma nova em "Criar conta".'))return;
   const{error}=await sb.rpc('sa_reiniciar_conta',{p_email:email});toast(error?'Erro: '+error.message:'Conta reiniciada');loadUsuarios()}
 async function delUsuario(email){if(!confirm('Remover o acesso de '+nomeUsu(email)+'?'))return;const{error}=await sb.from('sa_usuarios').delete().eq('email',email);if(error)toast('Erro: '+error.message);loadUsuarios()}
+
+/* ========= ficha impressa F.CD.101.05.05 ========= */
+function fichaHTML(c){
+  const v=x=>x?esc(x):'';
+  const d=x=>{if(!x)return'&nbsp;&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/';const[y,m,dd]=x.slice(0,10).split('-');return`${dd}/${m}/${y}`};
+  const tem=e=>(c.exames||[]).some(x=>x.nome===e);
+  const ck=e=>`<div class="ck"><span>(${tem(e)?'<b>X</b>':'&nbsp;&nbsp;'})</span> ${esc(e)}</div>`;
+  const sx=x=>`(${c.sexo===x?'<b>X</b>':'&nbsp;&nbsp;'}) ${x}`;
+  const sor=GRUPOS[0][1];
+  const obs=v(c.obs);
+  return`<section class="ficha">
+   <div class="hd"><div class="logo"><svg width="58" height="40" viewBox="0 0 58 40"><ellipse cx="29" cy="7" rx="7" ry="4" fill="#444"/><ellipse cx="17" cy="13" rx="4" ry="2.5" fill="#444"/><ellipse cx="40" cy="12" rx="4" ry="2.5" fill="#444"/><path d="M4 18c6-4 18-5 25 1 7-6 19-5 25-1-2 10-14 17-25 20C18 35 6 28 4 18z" fill="#555"/><path d="M10 20c5-2 13-2 19 3 6-5 14-5 19-3-3 7-11 12-19 14-8-2-16-7-19-14z" fill="#fff"/></svg>
+     <div><b>HEMOCENTRO</b><small>da Paraíba</small></div></div><div class="cod">F.CD.101.05.05</div></div>
+   <h1>Solicitação de Exames da Orientação do Doador</h1>
+   <div class="box dados">
+    <div class="ln"><span>NOME DO DOADOR:</span><i style="flex:1">${v(c.nome)}</i><span>IDADE:</span><i style="width:110px">${c.idade??''}</i></div>
+    <div class="ln"><span>SEXO : ${sx('F')} ${sx('M')}</span><span style="margin-left:auto">DATA DA COLETA:</span><i style="width:95px">${d(c.doacao)}</i><span style="margin-left:24px">DATA NASCIMENTO:</span><i style="width:110px">${d(c.nascimento)}</i></div>
+    <div class="ln"><span>RESPONSÁVEL:</span><i style="flex:1">${v(c.responsavel)}</i><span>DATA DA ENTREGA:</span><i style="width:95px">${d(c.entrega)}</i><span>REGISTRO:</span><i style="width:115px">${v(c.codigo)}</i></div>
+   </div>
+   <div class="mid">
+    <div class="box sor"><h2>SOROLOGIA</h2><div class="cols"><div>${sor.slice(0,4).map(ck).join('')}</div><div>${sor.slice(4).map(ck).join('')}</div></div></div>
+    <div class="dir"><div class="box"><h2>IMUNOHEMATOLOGIA</h2>${GRUPOS[1][1].map(ck).join('')}</div>
+     <div class="box"><h2>HEMOGLOBINOPATIAS</h2>${GRUPOS[2][1].map(ck).join('')}</div></div>
+   </div>
+   <div class="box obs"><div class="txt"><span>Observações:</span> <b>${obs}</b></div></div>
+  </section>`;
+}
+function imprimirFichas(lista){
+  const w=window.open('','_blank');
+  if(!w){toast('Permita pop-ups para imprimir');return}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Solicitação de Exames da Orientação do Doador</title><style>
+   @page{size:A4 portrait;margin:12mm}
+   *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:12.5px}
+   .ficha{width:100%;page-break-after:always;padding-top:4mm}.ficha:last-child{page-break-after:auto}
+   .hd{display:flex;justify-content:space-between;align-items:flex-end;padding:0 6mm}
+   .logo{display:flex;flex-direction:column;align-items:center}.logo b{font-size:19px;letter-spacing:.5px;font-family:'Arial Black',Arial,sans-serif}.logo small{font-size:9px;margin-top:-2px;align-self:flex-end}
+   .cod{font-weight:bold;font-size:11px;margin-bottom:6mm}
+   h1{text-align:center;font-size:15px;margin:5mm 0 4mm}
+   .box{border:1.3px solid #000;padding:2.5mm 3.5mm}
+   h2{text-align:center;font-size:12.5px;margin:0 0 3mm}
+   .ln{display:flex;align-items:flex-end;gap:4px;margin:2.6mm 0;white-space:nowrap}.ln span{flex:none}
+   .ln i{font-style:normal;border-bottom:1px solid #000;min-height:15px;padding:0 4px;overflow:hidden;font-weight:bold}
+   .mid{display:flex;gap:9mm;margin:4mm 0}.sor{flex:1.55}.dir{flex:1;display:flex;flex-direction:column;gap:3mm}
+   .cols{display:flex;gap:10mm}.cols>div{flex:1}.ck{margin:1.2mm 0}.ck span{display:inline-block;min-width:22px}
+   .obs .txt{line-height:6.4mm;min-height:25.6mm;white-space:pre-wrap;word-wrap:break-word;background:repeating-linear-gradient(transparent 0,transparent calc(6.4mm - 1px),#000 calc(6.4mm - 1px),#000 6.4mm);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+   .bar{position:fixed;top:8px;right:8px}@media print{.bar{display:none}}
+   @media screen{body{width:210mm;padding:12mm}}
+  </style></head><body><div class="bar"><button onclick="print()">Imprimir</button></div>${lista.map(fichaHTML).join('')}<script>setTimeout(()=>print(),400)<\/script></body></html>`);
+  w.document.close();
+}
 
 render();
 </script>
