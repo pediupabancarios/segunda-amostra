@@ -176,6 +176,9 @@ sb.auth.onAuthStateChange((ev,session)=>{
   if(ev==='INITIAL_SESSION'||ev==='SIGNED_IN'||ev==='SIGNED_OUT')setTimeout(()=>boot(session));
 });
 const isAdmin=()=>CU&&CU.papel==='admin';
+const DOM='@sa.hemocentro.invalid';
+const toEmail=u=>(u=u.trim().toLowerCase()).includes('@')?u:u+DOM;
+const nomeUsu=e=>String(e||'').endsWith(DOM)?e.slice(0,-DOM.length):e;
 
 /* ========= utils ========= */
 const G=id=>document.getElementById(id);
@@ -219,26 +222,27 @@ function pgLogin(){
   const f={
    loading:`<p style="text-align:center">Carregando...</p>`,
    entrar:`<form onsubmit="doLogin(event)">
-     <div class="ico-in">${I.user(18)}<input class="in" id="lu" type="email" placeholder="E-mail" autocomplete="username" required></div>
+     <div class="ico-in">${I.user(18)}<input class="in" id="lu" placeholder="Usuário" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
      <div class="ico-in">${I.lock}<input class="in" id="lp" type="password" placeholder="Senha" autocomplete="current-password" required></div>
      <button class="btn" style="margin-top:8px">Entrar</button>
      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--nv2)"><button type="button" onclick="LM='criar';render()">Criar conta</button><button type="button" onclick="LM='esqueci';render()">Esqueci a senha</button></div></form>`,
    criar:`<form onsubmit="doSignup(event)">
-     <div class="ico-in">${I.user(18)}<input class="in" id="lu" type="email" placeholder="E-mail institucional" autocomplete="username" required></div>
+     <div class="ico-in">${I.user(18)}<input class="in" id="lu" placeholder="Usuário (liberado pelo administrador)" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
      <div class="ico-in">${I.lock}<input class="in" id="lp" type="password" placeholder="Senha (mín. 8 caracteres)" minlength="8" autocomplete="new-password" required></div>
      <div class="ico-in">${I.lock}<input class="in" id="lp2" type="password" placeholder="Confirmar senha" minlength="8" autocomplete="new-password" required></div>
      <button class="btn" style="margin-top:8px">Criar conta</button>
-     <p style="font-size:12px;text-align:center;color:var(--tx3)">O acesso só é liberado se o administrador tiver cadastrado o seu e-mail.</p>
+     <p style="font-size:12px;text-align:center;color:var(--tx3)">Use o nome de usuário que o administrador liberou para você e escolha a sua senha.</p>
      <button type="button" style="font-size:13px;color:var(--nv2)" onclick="LM='entrar';render()">Já tenho conta</button></form>`,
    esqueci:`<form onsubmit="doReset(event)">
-     <div class="ico-in">${I.user(18)}<input class="in" id="lu" type="email" placeholder="E-mail" autocomplete="username" required></div>
-     <button class="btn" style="margin-top:8px">Enviar link de redefinição</button>
+     <div class="card" style="font-size:13.5px;line-height:1.5;text-align:center">Esqueceu a senha? Peça ao administrador para <b>reiniciar a sua conta</b> na tela Usuários. Depois, toque em <b>Criar conta</b> e escolha uma nova senha.</div>
+     <div class="ico-in">${I.user(18)}<input class="in" id="lu" type="email" placeholder="Ou, se você entra com e-mail, digite-o aqui" autocomplete="username"></div>
+     <button class="btn" style="margin-top:8px">Enviar link por e-mail</button>
      <button type="button" style="font-size:13px;color:var(--nv2)" onclick="LM='entrar';render()">Voltar</button></form>`,
    novasenha:`<form onsubmit="doNovaSenha(event)">
      <div class="ico-in">${I.lock}<input class="in" id="lp" type="password" placeholder="Nova senha (mín. 8 caracteres)" minlength="8" autocomplete="new-password" required></div>
      <button class="btn" style="margin-top:8px">Salvar nova senha</button></form>`,
    semacesso:`<form onsubmit="event.preventDefault();logout()"><div class="card" style="text-align:center;font-size:14px;line-height:1.5">
-     O e-mail <b>${esc(CU&&CU.email)}</b> ainda não está autorizado.<br>Peça ao administrador para liberar o seu acesso.</div>
+     O usuário <b>${esc(CU&&nomeUsu(CU.email))}</b> ainda não está autorizado.<br>Peça ao administrador para liberar o seu acesso.</div>
      <button class="btn out" onclick="">${I.out} Sair</button></form>`,
   };
   const k=AUTH==='login'?LM:AUTH;
@@ -256,16 +260,25 @@ async function busy(e,fn){const b=e.target.querySelector('.btn');b.disabled=true
 const ERR={'Invalid login credentials':'E-mail ou senha incorretos.','Email not confirmed':'Confirme seu e-mail pelo link enviado antes de entrar.','User already registered':'Este e-mail já tem conta. Use "Entrar".'};
 const msg=e=>ERR[e.message]||e.message;
 function doLogin(e){e.preventDefault();busy(e,async()=>{
-  const{error}=await sb.auth.signInWithPassword({email:G('lu').value.trim(),password:G('lp').value});
+  const{error}=await sb.auth.signInWithPassword({email:toEmail(G('lu').value),password:G('lp').value});
   if(error)toast(msg(error));else location.hash='#home';
 })}
 function doSignup(e){e.preventDefault();if(G('lp').value!==G('lp2').value){toast('As senhas não conferem');return}busy(e,async()=>{
-  const{data,error}=await sb.auth.signUp({email:G('lu').value.trim(),password:G('lp').value,options:{emailRedirectTo:appUrl()}});
-  if(error){toast(msg(error));return}
-  if(!data.session){LM='entrar';render();toast('Conta criada. Confirme pelo link enviado ao seu e-mail.')}
+  const u=G('lu').value.trim(),pw=G('lp').value;
+  if(u.includes('@')){
+    const{data,error}=await sb.auth.signUp({email:u,password:pw,options:{emailRedirectTo:appUrl()}});
+    if(error){toast(msg(error));return}
+    if(!data.session){LM='entrar';render();toast('Conta criada. Confirme pelo link enviado ao seu e-mail.')}
+    return;
+  }
+  const{error}=await sb.rpc('sa_cadastrar',{p_usuario:u,p_senha:pw});
+  if(error){toast(error.message);return}
+  const r=await sb.auth.signInWithPassword({email:toEmail(u),password:pw});
+  if(r.error){LM='entrar';render();toast('Conta criada. Agora toque em Entrar.')}else{toast('Conta criada');location.hash='#home'}
 })}
 function doReset(e){e.preventDefault();busy(e,async()=>{
-  const{error}=await sb.auth.resetPasswordForEmail(G('lu').value.trim(),{redirectTo:appUrl()});
+  const em=G('lu').value.trim();if(!em.includes('@')){toast('Peça ao administrador para reiniciar sua conta');return}
+  const{error}=await sb.auth.resetPasswordForEmail(em,{redirectTo:appUrl()});
   if(error)toast(msg(error));else{LM='entrar';render();toast('Se o e-mail existir, enviamos um link de redefinição.')}
 })}
 function doNovaSenha(e){e.preventDefault();busy(e,async()=>{
@@ -495,26 +508,30 @@ function pgUsuarios(){
    <div class="card"><div class="h2">Liberar acesso</div>
     <form onsubmit="addUsuario(event)">
      <label class="l">Nome</label><input class="in" id="un" placeholder="Ex.: Dr. Marcos Silva" required>
-     <label class="l">E-mail</label><input class="in" id="ue" type="email" placeholder="email@exemplo.com" required>
+     <label class="l">Nome de usuário</label><input class="in" id="ue" placeholder="Ex.: marcos (só letras, números, . _ -)" autocapitalize="none" spellcheck="false" required>
      <label class="l">Perfil</label><select class="in" id="up"><option value="usuario">Usuário</option><option value="admin">Administrador</option></select>
      <button class="btn" style="margin-top:14px">Liberar acesso</button></form>
-    <p style="font-size:12px;color:var(--tx2);margin-top:10px;line-height:1.5">Depois de liberado, a pessoa abre o app e toca em <b>Criar conta</b> com este mesmo e-mail.</p></div>
+    <p style="font-size:12px;color:var(--tx2);margin-top:10px;line-height:1.5">Depois de liberado, a pessoa abre o app, toca em <b>Criar conta</b>, digita este nome de usuário e escolhe a própria senha.</p></div>
    <div class="h2">Equipe</div><div id="ulst" style="display:flex;flex-direction:column;gap:8px"><div class="empty">Carregando...</div></div></main>`;
 }
 async function loadUsuarios(){
-  const{data,error}=await sb.from('sa_usuarios').select('*').order('nome');const el=G('ulst');if(!el)return;
+  const[{data,error},ct]=await Promise.all([sb.from('sa_usuarios').select('*').order('nome'),sb.rpc('sa_contas')]);const el=G('ulst');if(!el)return;
   if(error){el.innerHTML=`<div class="empty">${esc(error.message)}</div>`;return}
+  const contas=new Set((ct.data||[]).map(x=>x.email));
   el.innerHTML=data.map(u=>`<div class="card" style="padding:12px;display:flex;align-items:center;gap:10px"><div style="flex:1;min-width:0">
     <b style="font-size:14px">${esc(u.nome)}</b>${u.papel==='admin'?' <span class="pill" style="background:var(--nv2)">Admin</span>':''}${u.ativo?'':' <span class="pill p-pendente">Bloqueado</span>'}
-    <div style="font-size:12.5px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis">${esc(u.email)}</div></div>
+    <div style="font-size:12.5px;color:var(--tx2);overflow:hidden;text-overflow:ellipsis">${esc(nomeUsu(u.email))} · ${contas.has(u.email)?'conta criada':'<span style="color:var(--or)">aguardando criar conta</span>'}</div>
+    ${u.email!==CU.email&&u.email.endsWith(DOM)&&contas.has(u.email)?`<button style="font-size:12px;color:var(--nv2);margin-top:4px" onclick="reiniciar('${esc(u.email)}')">Reiniciar conta (senha esquecida)</button>`:''}</div>
     ${u.email===CU.email?'':`<button style="font-size:12.5px;color:var(--nv2)" onclick="setAtivo('${esc(u.email)}',${!u.ativo})">${u.ativo?'Bloquear':'Reativar'}</button>
     <button style="font-size:12.5px;color:var(--rd)" onclick="delUsuario('${esc(u.email)}')">Remover</button>`}</div>`).join('');
 }
 async function addUsuario(e){e.preventDefault();
-  const{error}=await sb.from('sa_usuarios').upsert({email:G('ue').value.trim().toLowerCase(),nome:G('un').value.trim(),papel:G('up').value,ativo:true});
+  const{error}=await sb.from('sa_usuarios').upsert({email:toEmail(G('ue').value),nome:G('un').value.trim(),papel:G('up').value,ativo:true});
   if(error){toast('Erro: '+error.message);return}e.target.reset();toast('Acesso liberado');loadUsuarios()}
 async function setAtivo(email,v){const{error}=await sb.from('sa_usuarios').update({ativo:v}).eq('email',email);if(error)toast('Erro: '+error.message);loadUsuarios()}
-async function delUsuario(email){if(!confirm('Remover o acesso de '+email+'?'))return;const{error}=await sb.from('sa_usuarios').delete().eq('email',email);if(error)toast('Erro: '+error.message);loadUsuarios()}
+async function reiniciar(email){if(!confirm('Reiniciar a conta de '+nomeUsu(email)+'? A senha atual deixa de funcionar e a pessoa cria uma nova em "Criar conta".'))return;
+  const{error}=await sb.rpc('sa_reiniciar_conta',{p_email:email});toast(error?'Erro: '+error.message:'Conta reiniciada');loadUsuarios()}
+async function delUsuario(email){if(!confirm('Remover o acesso de '+nomeUsu(email)+'?'))return;const{error}=await sb.from('sa_usuarios').delete().eq('email',email);if(error)toast('Erro: '+error.message);loadUsuarios()}
 
 render();
 </script>
