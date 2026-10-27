@@ -561,6 +561,7 @@ async function reiniciar(email){if(!confirm('Reiniciar a conta de '+nomeUsu(emai
 async function delUsuario(email){if(!confirm('Remover o acesso de '+nomeUsu(email)+'?'))return;const{error}=await sb.from('sa_usuarios').delete().eq('email',email);if(error)toast('Erro: '+error.message);loadUsuarios()}
 
 /* ========= ficha impressa F.CD.101.05.05 ========= */
+const CARIMBO={nome:'Dr. Rodrigo Cahuana Chipayo',registro:'CRM 11707'};
 function fichaHTML(c){
   const v=x=>x?esc(x):'';
   const d=x=>{if(!x)return'&nbsp;&nbsp;&nbsp;&nbsp;/&nbsp;&nbsp;&nbsp;&nbsp;/';const[y,m,dd]=x.slice(0,10).split('-');return`${dd}/${m}/${y}`};
@@ -584,6 +585,7 @@ function fichaHTML(c){
      <div class="box"><h2>HEMOGLOBINOPATIAS</h2>${GRUPOS[2][1].map(ck).join('')}</div></div>
    </div>
    <div class="box obs"><div class="txt"><span>Observações:</span> <b>${obs}</b></div></div>
+   <div class="ass"><div class="linha"></div><b>${esc(CARIMBO.nome)}</b><span>${esc(CARIMBO.registro)}</span><small>Assinatura e carimbo do médico</small></div>
   </section>`;
 }
 function imprimirFichas(lista){
@@ -604,6 +606,8 @@ function imprimirFichas(lista){
    .mid{display:flex;gap:9mm;margin:4mm 0}.sor{flex:1.55}.dir{flex:1;display:flex;flex-direction:column;gap:3mm}
    .cols{display:flex;gap:10mm}.cols>div{flex:1}.ck{margin:1.2mm 0}.ck span{display:inline-block;min-width:22px}
    .obs .txt{line-height:6.4mm;min-height:25.6mm;white-space:pre-wrap;word-wrap:break-word;background:repeating-linear-gradient(transparent 0,transparent calc(6.4mm - 1px),#000 calc(6.4mm - 1px),#000 6.4mm);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+   .ass{width:85mm;margin:14mm 0 0 auto;text-align:center;display:flex;flex-direction:column;gap:1mm}
+   .ass .linha{border-top:1px solid #000;margin-bottom:1.5mm}.ass b{font-size:13px}.ass small{font-size:9.5px;color:#444;margin-top:1mm}
    .bar{position:fixed;top:8px;right:8px}@media print{.bar{display:none}}
    @media screen{body{width:210mm;padding:12mm}}
   </style></head><body><div class="bar"><button onclick="print()">Imprimir</button></div>${lista.map(fichaHTML).join('')}<script>setTimeout(()=>print(),400)<\/script></body></html>`);
